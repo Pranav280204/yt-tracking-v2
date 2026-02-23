@@ -897,7 +897,7 @@ def process_gains(rows_asc: list[dict]):
 
     Returns list of tuples:
       (ts_ist_str, views, gain_5min, hourly_views_gain, hourly_likes_gain, gain_24h,
-       gain_24h_midpoint_ist_str, hourly_pct_change, daily_likes_gain, likes_val, comments_val)
+       gain_24h_midpoint_ist_str, daily_views_gain, likes_val, comments_val)
 
     hourly_likes_gain may be None when likes are missing or interpolation isn't possible.
     """
@@ -1066,73 +1066,37 @@ def process_gains(rows_asc: list[dict]):
             gain_24h = None
             gain_24h_midpoint_ist = None
 
-        # ---------- hourly percent change (views) ----------
-        hourly_pct_change = None
-        if i > 0:
-            prev_idx_row = i - 1
-            prev_target_h_ts = (rows_asc[prev_idx_row]["ts_utc"] - timedelta(hours=1)).timestamp()
-            pos_prev = bisect.bisect_right(ts_list, prev_target_h_ts, 0, prev_idx_row + 1)
-            prev_prev_idx = pos_prev - 1
-            prev_next_idx = pos_prev if pos_prev <= prev_idx_row else None
-
-            if prev_prev_idx >= 0 and prev_next_idx is not None:
-                t0 = ts_list[prev_prev_idx]; v0 = views_list[prev_prev_idx]
-                t1 = ts_list[prev_next_idx]; v1 = views_list[prev_next_idx]
-                if t1 == t0:
-                    ref_prev = v1
-                else:
-                    frac = (prev_target_h_ts - t0) / (t1 - t0)
-                    ref_prev = v0 + frac * (v1 - v0)
-                try:
-                    prev_hourly = views_list[prev_idx_row] - int(round(ref_prev))
-                except Exception:
-                    prev_hourly = None
-            elif prev_prev_idx >= 0:
-                prev_hourly = views_list[prev_idx_row] - views_list[prev_prev_idx]
-            else:
-                prev_hourly = None
-
-            if hourly_views is not None and prev_hourly not in (None, 0):
-                try:
-                    hourly_pct_change = round(((hourly_views - prev_hourly) / prev_hourly) * 100, 2)
-                except Exception:
-                    hourly_pct_change = None
-
-        # ---------- daily likes gain (anchored to first sample time) ----------
+        # ---------- daily views gain (anchored to first sample time) ----------
         # Day boundary repeats every 24h from first_ts (video added timestamp).
         # Example: first_ts 22:30 => cycles are [22:30, 22:29:59] each day.
-        daily_likes_gain = None
+        daily_views_gain = None
         try:
-            if likes_val is not None:
-                elapsed = max(0.0, ts_list[i] - first_ts_epoch)
-                cycle_idx = int(elapsed // 86400)
-                cycle_start_ts = first_ts_epoch + (cycle_idx * 86400)
+            elapsed = max(0.0, ts_list[i] - first_ts_epoch)
+            cycle_idx = int(elapsed // 86400)
+            cycle_start_ts = first_ts_epoch + (cycle_idx * 86400)
 
-                pos_cycle = bisect.bisect_right(ts_list, cycle_start_ts, 0, i + 1)
-                prev_idx_cycle = pos_cycle - 1
-                next_idx_cycle = pos_cycle if pos_cycle <= i else None
+            pos_cycle = bisect.bisect_right(ts_list, cycle_start_ts, 0, i + 1)
+            prev_idx_cycle = pos_cycle - 1
+            next_idx_cycle = pos_cycle if pos_cycle <= i else None
 
-                ref_likes = None
-                if prev_idx_cycle >= 0 and next_idx_cycle is not None:
-                    l0 = likes_list[prev_idx_cycle]
-                    l1 = likes_list[next_idx_cycle]
-                    if l0 is not None and l1 is not None:
-                        t0 = ts_list[prev_idx_cycle]
-                        t1 = ts_list[next_idx_cycle]
-                        if t1 == t0:
-                            ref_likes = l1
-                        else:
-                            frac = (cycle_start_ts - t0) / (t1 - t0)
-                            ref_likes = l0 + frac * (l1 - l0)
-                    elif l0 is not None:
-                        ref_likes = l0
-                elif prev_idx_cycle >= 0:
-                    ref_likes = likes_list[prev_idx_cycle]
+            ref_views = None
+            if prev_idx_cycle >= 0 and next_idx_cycle is not None:
+                v0 = views_list[prev_idx_cycle]
+                v1 = views_list[next_idx_cycle]
+                t0 = ts_list[prev_idx_cycle]
+                t1 = ts_list[next_idx_cycle]
+                if t1 == t0:
+                    ref_views = v1
+                else:
+                    frac = (cycle_start_ts - t0) / (t1 - t0)
+                    ref_views = v0 + frac * (v1 - v0)
+            elif prev_idx_cycle >= 0:
+                ref_views = views_list[prev_idx_cycle]
 
-                if ref_likes is not None:
-                    daily_likes_gain = likes_val - int(round(ref_likes))
+            if ref_views is not None:
+                daily_views_gain = views - int(round(ref_views))
         except Exception:
-            daily_likes_gain = None
+            daily_views_gain = None
 
         comments_val = r.get("comments")
 
@@ -1144,8 +1108,7 @@ def process_gains(rows_asc: list[dict]):
             hourly_likes,       # <-- NEW hourly likes gain
             gain_24h,
             gain_24h_midpoint_ist,
-            hourly_pct_change,
-            daily_likes_gain,
+            daily_views_gain,
             r.get("likes"),
             comments_val
         ))
@@ -1578,33 +1541,10 @@ def build_video_display(vid: str):
 
             for tpl in processed:
                 # tpl: (ts_ist, views, gain_5m, hourly_views_gain, hourly_likes_gain, gain_24h,
-                #       gain_24h_midpoint_ist, hourly_pct_change, daily_likes_gain, likes_val, comments_val)
+                #       gain_24h_midpoint_ist, daily_views_gain, likes_val, comments_val)
                 (ts_ist, views, gain_5m, hourly_views_gain, hourly_likes_gain, gain_24h,
-                 gain_24h_midpoint_ist, hourly_pct_change, daily_likes_gain, likes_val, comments_val) = tpl
+                 gain_24h_midpoint_ist, daily_views_gain, likes_val, comments_val) = tpl
                 time_part = ts_ist.split(" ")[1]
-
-                # --- change 24h vs prev day (tolerant match) ---
-                # prev_map uses same tuple shape; gain_24h is at index 5
-                prev_tpl = prev_map.get(time_part) or find_closest_prev(prev_map, time_part, max_earlier_seconds=300)
-                prev_gain24 = prev_tpl[5] if prev_tpl else None
-                pct24_calc = None
-                if prev_gain24 not in (None, 0):
-                    try:
-                        pct24_calc = round(((gain_24h or 0) - prev_gain24) / prev_gain24 * 100, 2)
-                    except Exception:
-                        pct24_calc = None
-
-                # --- projected (based on yesterday ~22:30) ---
-                projected = None
-                ref_2230 = find_closest_prev(prev_map, "22:30:00", max_earlier_seconds=300)
-                if ref_2230 and pct24_calc not in (None,):
-                    base_views = ref_2230[1]
-                    base_gain = ref_2230[5]  # gain_24h at index 5
-                    if base_views is not None and base_gain not in (None, 0):
-                        try:
-                            projected = int(base_views + base_gain * (1 + pct24_calc / 100.0))
-                        except Exception:
-                            projected = None
 
                 # --- comparison diff (if configured) ---
                 comp_diff = None
@@ -1659,14 +1599,13 @@ def build_video_display(vid: str):
                 except Exception:
                     engagement_rate = None
 
-                # Append canonical tuple now includes daily_likes_gain and likes_gain
                 # (ts_ist, views, gain_5m, hourly_views_gain, hourly_likes_gain, gain_24h,
-                #  gain_24h_midpoint_ist, hourly_pct_change, projected, comp_diff, five_min_ratio,
-                #  daily_likes_gain, likes_gain, comments_val, engagement_rate)
+                #  gain_24h_midpoint_ist, comp_diff, five_min_ratio, daily_views_gain,
+                #  likes_gain, comments_val, engagement_rate)
                 display_rows.append((
                     ts_ist, views, gain_5m, hourly_views_gain, hourly_likes_gain, gain_24h,
-                    gain_24h_midpoint_ist, hourly_pct_change,
-                    projected, comp_diff, five_min_ratio, daily_likes_gain, likes_gain, comments_val, engagement_rate
+                    gain_24h_midpoint_ist, comp_diff, five_min_ratio, daily_views_gain,
+                    likes_gain, comments_val, engagement_rate
                 ))
 
             # newest-first for UI
@@ -2832,8 +2771,8 @@ def export_video(video_id):
     Export all stored rows for a video into Excel.
     Columns (in this order):
       Time (IST), Views, Gain (5 min), Hourly Gain (views), Hourly Likes Gain,
-      Gain (24 h), Change 24h vs prev day (%), Projected (min) views, Compare diff,
-      Daily Gain (likes), Likes, Comments, Engagement Rate (%)
+      Gain (24 h), 24h Midpoint Time, Compare diff,
+      Daily Gain (views), Likes, Comments, Engagement Rate (%)
     """
     info = build_video_display(video_id)
     if info is None:
@@ -2849,27 +2788,20 @@ def export_video(video_id):
 
         for tpl in day_rows:
             # tpl canonical shape:
-            # (ts, views, gain5, hourly_views_gain, hourly_likes_gain, gain24, pct24_calc,
-            #  projected, comp_diff, five_min_ratio, daily_likes_gain, likes_gain, comments_val, engagement_rate)
+            # (ts, views, gain5, hourly_views_gain, hourly_likes_gain, gain24, midpoint_24h,
+            #  comp_diff, five_min_ratio, daily_views_gain, likes_gain, comments_val, engagement_rate)
             ts = tpl[0]
             views = tpl[1] if len(tpl) > 1 else None
 
             # defaults
-            gain5 = hourly_views_gain = hourly_likes_gain = gain24 = pct24 = projected = comp_diff = five_min_ratio = daily_likes_gain = likes_gain = comments = engagement_rate = None
+            gain5 = hourly_views_gain = hourly_likes_gain = gain24 = midpoint_24h = comp_diff = five_min_ratio = daily_views_gain = likes_gain = comments = engagement_rate = None
 
             rest = list(tpl[2:])  # remaining fields after ts and views
 
             # Map rest by position when present
-            # expected order for rest: gain5, hourly_views_gain, hourly_likes_gain, gain24, pct24, projected, comp_diff, five_min_ratio, daily_likes_gain, likes_gain, comments, engagement_rate
-            vals = rest + [None] * (12 - len(rest))
-            (gain5, hourly_views_gain, hourly_likes_gain, gain24, pct24, projected, comp_diff, five_min_ratio, daily_likes_gain, likes_gain, comments, engagement_rate) = vals[:12]
-
-            pct24_str = ""
-            if pct24 is not None and pct24 != "":
-                try:
-                    pct24_str = f"{float(pct24):.2f}"
-                except Exception:
-                    pct24_str = str(pct24)
+            # expected order for rest: gain5, hourly_views_gain, hourly_likes_gain, gain24, midpoint_24h, comp_diff, five_min_ratio, daily_views_gain, likes_gain, comments, engagement_rate
+            vals = rest + [None] * (11 - len(rest))
+            (gain5, hourly_views_gain, hourly_likes_gain, gain24, midpoint_24h, comp_diff, five_min_ratio, daily_views_gain, likes_gain, comments, engagement_rate) = vals[:11]
 
             eng_str = ""
             if engagement_rate is not None:
@@ -2885,10 +2817,9 @@ def export_video(video_id):
                 "Hourly Gain (views)": hourly_views_gain if hourly_views_gain is not None else "",
                 "Hourly Likes Gain": hourly_likes_gain if hourly_likes_gain is not None else "",
                 "Gain (24 h)": gain24 if gain24 is not None else "",
-                "Change 24h vs prev day (%)": pct24_str,
-                "Projected (min) views": projected if projected is not None else "",
+                "24h Midpoint Time": midpoint_24h if midpoint_24h is not None else "",
                 "Compare diff": comp_diff if comp_diff is not None else "",
-                "Daily Gain (likes)": daily_likes_gain if daily_likes_gain is not None else "",
+                "Daily Gain (views)": daily_views_gain if daily_views_gain is not None else "",
                 "Likes": likes_gain if likes_gain is not None else "",
                 "Comments": comments if comments is not None else "",
                 "Engagement Rate (%)": eng_str
@@ -2945,8 +2876,7 @@ def export_video(video_id):
         # ensure column order in file by creating DataFrame with exact keys in order above
         cols_order = [
             "Time (IST)", "Views", "Gain (5 min)", "Hourly Gain (views)", "Hourly Likes Gain",
-            "Gain (24 h)", "Change 24h vs prev day (%)",
-            "Projected (min) views", "Compare diff", "Daily Gain (likes)", "Likes", "Comments", "Engagement Rate (%)"
+            "Gain (24 h)", "24h Midpoint Time", "Compare diff", "Daily Gain (views)", "Likes", "Comments", "Engagement Rate (%)"
         ]
         # if df_views lacks any column (edge case), create them to preserve order
         for c in cols_order:
