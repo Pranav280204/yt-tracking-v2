@@ -2306,7 +2306,7 @@ def home():
 def home_json():
     conn = db()
     with conn.cursor() as cur:
-        cur.execute("SELECT video_id FROM video_list ORDER BY is_deleted ASC, name")
+        cur.execute("SELECT video_id FROM video_list ORDER BY name")
         video_rows = cur.fetchall()
 
     video_ids = [v["video_id"] for v in video_rows]
@@ -2486,12 +2486,12 @@ def video_detail(video_id):
 def video_detail_json(video_id):
     """
     Return minimal JSON for the video used by the frontend to update live values.
-    Use lightweight queries to keep polling fast without rebuilding full display data.
     """
     conn = db()
     with conn.cursor() as cur:
         cur.execute(
-            "SELECT thumbnail_url, thumbnail_prev_url, thumbnail_changed FROM video_list WHERE video_id=%s AND is_deleted=FALSE",
+            "SELECT thumbnail_url, thumbnail_prev_url, thumbnail_changed, thumbnail_changed_at "
+            "FROM video_list WHERE video_id=%s",
             (video_id,)
         )
         vrow = cur.fetchone()
@@ -2505,10 +2505,8 @@ def video_detail_json(video_id):
 
     latest_ts = latest["ts_utc"] if latest else None
     latest_views = latest["views"] if latest else None
-    latest_ts_iso = latest_ts.isoformat() if latest_ts is not None else None
-    latest_ts_ist = latest_ts.astimezone(IST).strftime("%Y-%m-%d %H:%M:%S") if latest_ts is not None else None
-
-    # resolve thumbnail the same way video_detail route does
+    latest_ts_iso = latest_ts.isoformat() if latest_ts else None
+    latest_ts_ist = latest_ts.astimezone(IST).strftime("%Y-%m-%d %H:%M:%S") if latest_ts else None
     thumbnail = vrow.get("thumbnail_url") or f"https://i.ytimg.com/vi/{video_id}/hqdefault.jpg"
 
     return jsonify({
@@ -2521,58 +2519,18 @@ def video_detail_json(video_id):
     })
 
 
-@app.get("/video/<video_id>/live_views")
+@app.get("/video/<video_id>/day_html")
 @login_required
-def video_live_views(video_id):
-    api_key = get_rotating_api_key()
-    if not api_key:
-        return jsonify({"error": "api_key_missing"}), 503
-    try:
-        resp = requests.get(
-            "https://www.googleapis.com/youtube/v3/videos",
-            params={
-                "part": "statistics",
-                "id": video_id,
-                "key": api_key,
-                "fields": "items(statistics/viewCount)"
-            },
-            timeout=10
-        )
-        resp.raise_for_status()
-        data = resp.json()
-        items = data.get("items", [])
-        if not items:
-            return jsonify({"video_id": video_id, "live_views": None})
-        view_count = items[0].get("statistics", {}).get("viewCount")
-        live_views = int(view_count) if view_count is not None else None
-        return jsonify({"video_id": video_id, "live_views": live_views})
-    except requests.RequestException as exc:
-        log.warning("Live view fetch failed for %s: %s", video_id, exc)
-        return jsonify({"error": "fetch_failed"}), 502
-
-
-@app.post("/video/<video_id>/refresh")
-@login_required
-def refresh_video_rows(video_id):
-    invalidate_video_cache(video_id)
-    flash("Rows refreshed from the database.", "success")
-    return redirect(url_for("video_detail", video_id=video_id))
-
-@app.get("/video/<video_id>/rows")
-@login_required
-def video_rows_json(video_id):
+def video_day_html(video_id):
+    date_str = (request.args.get("date") or "").strip()
+    if not date_str:
+        return jsonify({"error": "missing date"}), 400
     invalidate_video_cache(video_id)
     info = build_video_display(video_id)
     if info is None:
         return jsonify({"error": "not found"}), 404
-    days_html = render_template("_video_day_blocks.html", daily=info["daily"])
-    dates = list(info["daily"].keys())
-    return jsonify({
-        "dates": dates,
-        "days_html": days_html,
-        "latest_ts_iso": info.get("latest_ts_iso"),
-        "latest_ts_ist": info.get("latest_ts_ist")
-    })
+    rows = info.get("daily", {}).get(date_str, [])
+    return render_template("_day_table.html", date=date_str, day_rows=rows)
 
 
 @app.post("/add_video")
