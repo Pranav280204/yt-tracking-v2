@@ -1526,6 +1526,11 @@ def build_video_display(vid: str):
         dates_sorted = sorted(grouped.keys(), reverse=True)
         for date_str in dates_sorted:
             processed = grouped[date_str]
+            prev_date_str = (datetime.fromisoformat(date_str).date() - timedelta(days=1)).isoformat()
+            prev_map = {
+                prev_tpl[0].split(" ")[1]: prev_tpl
+                for prev_tpl in grouped.get(prev_date_str, [])
+            }
             display_rows = []
 
             # track previous likes for same-date chronological samples so we can compute likes gain
