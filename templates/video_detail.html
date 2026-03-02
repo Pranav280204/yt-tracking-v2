@@ -59,14 +59,25 @@
       align-items:center;
       padding:.35rem .6rem;
       border-radius:.45rem;
-      background:#f7f9fb;
-      border:1px solid var(--border);
+      background:rgba(255,255,255,.08);
+      border:1px solid #3a4150;
       margin-top:.45rem;
       font-size:.94rem;
       white-space:nowrap;
+      color:#f5f8ff;
     }
     .live-badge .dot { width:9px; height:9px; border-radius:50%; background:#28a745; }
     .live-sub { display:block; font-size:.85rem; color:var(--muted); margin-top:.12rem; }
+    .live-counter {
+      margin-top:.75rem;
+      padding:.75rem 1rem;
+      border-radius:.6rem;
+      border:1px solid var(--border);
+      background:linear-gradient(180deg,#f8fbff,#ffffff);
+    }
+    .live-counter-label { font-size:.9rem; color:var(--muted); }
+    .live-counter-value { font-size:2rem; font-weight:800; color:var(--primary); line-height:1.1; }
+    .live-counter-sub { font-size:.8rem; color:var(--muted); margin-top:.15rem; }
 
     .action-row { display:flex; gap:.5rem; flex-wrap:wrap; align-items:center; margin-top:.8rem; }
     .action-row .btn { min-width:110px; flex:0 0 auto; }
@@ -81,6 +92,31 @@
     .table thead th { font-size:.9rem; border-bottom:1px solid var(--border); white-space:nowrap; }
     .table td, .table th { vertical-align:middle; font-size:.92rem; border-top:1px solid #fafafa; white-space:nowrap; }
     .table-card { padding:.75rem; border-radius:.5rem; border:1px solid var(--border); background:linear-gradient(180deg,#ffffff,#fbfcff); }
+
+    /* Video detail day-table color polish */
+    .table-card .table thead th {
+      background: linear-gradient(180deg, #f4f8ff 0%, #eef5ff 100%);
+      color: #1f3b73;
+      border-top: 0;
+      font-weight: 700;
+    }
+    .table-card .table tbody tr:nth-child(odd) { background: #fcfdff; }
+    .table-card .table tbody tr:nth-child(even) { background: #f8fbff; }
+    .table-card .table tbody tr td { border-top: 1px solid #eef2f7; }
+
+    /* Column accents */
+    .table-card .table tbody td:nth-child(2) { color: #0b5ed7; font-weight: 700; }
+    .table-card .table tbody td:nth-child(6) { color: #5f3dc4; font-weight: 700; }
+    .table-card .table tbody td:nth-child(7) {
+      background: rgba(255, 193, 7, 0.10);
+      color: #8a6d00;
+      font-weight: 700;
+    }
+    .table-card .table tbody td:nth-child(8) {
+      background: rgba(13, 202, 240, 0.10);
+      color: #0b7285;
+      font-weight: 700;
+    }
 
     /* make stats panel normal (not sticky or fixed-width) per request */
     .stats-panel { position:static; width:100%; align-self:flex-start; }
@@ -123,6 +159,37 @@
     /* allow table horizontal scroll */
     .table-responsive { overflow-x:auto; -webkit-overflow-scrolling:touch; }
 
+  
+
+    /* Dark theme alignment with home page */
+    body {
+      background: radial-gradient(circle at top right, #1b2233 0%, #0b0d12 42%, #07090d 100%);
+      color:#ecf0ff;
+    }
+    .container { max-width:1320px; }
+    .card, .table-card, .target-card, .live-counter {
+      background: linear-gradient(180deg, rgba(255,255,255,.03), rgba(255,255,255,.01));
+      border:1px solid #2a2f3a !important;
+      box-shadow:0 16px 32px rgba(0,0,0,.28);
+      color:#ecf0ff;
+    }
+    .small-note, .live-sub, .stat-sub, .text-muted { color:#9ba6bf !important; }
+    .table { --bs-table-bg: transparent; --bs-table-color:#ecf0ff; --bs-table-border-color:#2a2f3a; }
+    .table-card .table thead th { background:rgba(255,87,34,.12); color:#ffd7ca; border-bottom:1px solid #2a2f3a; }
+    .table-card .table tbody tr:nth-child(odd), .table-card .table tbody tr:nth-child(even) { background:transparent; }
+    .table-card .table tbody tr td { border-top:1px solid #2a2f3a; }
+    .form-control, .form-select { background:#0f131b; border:1px solid #2a2f3a; color:#ecf0ff; }
+    .form-control:focus, .form-select:focus { background:#0f131b; color:#ecf0ff; border-color:#ff5722; box-shadow:0 0 0 .2rem rgba(255,87,34,.18); }
+    .btn-primary { background:#ff5722; border-color:#ff5722; }
+    .btn-outline-secondary, .btn-outline-primary { color:#e5ebff; border-color:#3a4150; }
+    .btn-outline-warning { color:#ffd54a; border-color:#ffd54a; }
+    .btn-outline-warning:hover { background:#ffd54a; color:#171717; }
+    .btn-outline-danger { color:#ff7d7d; border-color:#ff7d7d; }
+    .btn-outline-danger:hover { background:#ff7d7d; color:#171717; }
+    .form-control::placeholder { color:#95a2bd; opacity:1; }
+    .mono { color:#e7efff; }
+    .card-compact { background:rgba(255,255,255,.03); border:1px solid #2a2f3a; border-radius:.6rem; padding:.65rem .75rem; }
+
   </style>
 </head>
 <body>
@@ -134,7 +201,7 @@
     <div class="d-flex align-items-center gap-2">
       {% if current_user %}
         <span class="small text-muted d-none d-sm-inline">Logged in as <strong>{{ current_user.username }}</strong></span>
-        <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('admin_users') }}">Add user</a>
+        <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('admin_users') }}">Admin pannel</a>
         <a class="btn btn-sm btn-outline-danger" href="{{ url_for('logout') }}">Logout</a>
       {% else %}
         <a class="btn btn-sm btn-primary" href="{{ url_for('login') }}">Login</a>
@@ -147,6 +214,12 @@
       <a href="https://www.youtube.com/watch?v={{ v.video_id }}" target="_blank" rel="noopener noreferrer">
         <img class="video-thumb" src="{{ v.thumbnail }}" alt="thumbnail for {{ v.name }}">
       </a>
+
+      <div class="live-counter" id="liveViewCounter">
+        <div class="live-counter-label">Live views</div>
+        <div class="live-counter-value" id="liveViewValue">{{ "{:,}".format(v.latest_views or 0) }}</div>
+        <div class="live-counter-sub">Updates every {{ v.pooling_interval }}s</div>
+      </div>
 
       <div class="mt-2">
         <div class="video-title">{{ v.name }}</div>
@@ -248,35 +321,7 @@
   </div>
 
   <div class="content-wrap">
-    <!-- Comparison & Targets area -->
-    <div class="compare-box mb-3 card p-3">
-      <div class="d-flex align-items-center justify-content-between gap-2">
-        <div>
-          <strong>Compare with other video</strong>
-          <div class="small-note">Provide a video link/ID and a comparison date (YYYY-MM-DD). The app will compute offset days automatically.</div>
-        </div>
-        <div class="d-flex gap-2 align-items-center">
-          <form method="POST" class="d-flex gap-2 align-items-center" action="{{ url_for('set_comparison', video_id=v.video_id) }}">
-            <input name="comparison_link" class="form-control form-control-sm" placeholder="Compare video (link or id)" style="min-width:220px;">
-            <input name="comparison_date" type="date" class="form-control form-control-sm" placeholder="YYYY-MM-DD" style="width:150px;">
-            <button class="btn btn-sm btn-primary" type="submit">Set</button>
-          </form>
-
-          <form method="POST" action="{{ url_for('set_comparison', video_id=v.video_id) }}">
-            <input type="hidden" name="comparison_link" value="">
-            <input type="hidden" name="comparison_date" value="">
-            <button class="btn btn-sm btn-outline-secondary" type="submit">Reset</button>
-          </form>
-        </div>
-      </div>
-
-      {% if v.compare_meta %}
-        <div class="mt-2 small-note">
-          Comparing to <strong>{{ v.compare_meta.video_id }}</strong> with offset <strong>{{ v.compare_meta.offset_days }}</strong> days.
-        </div>
-      {% endif %}
-    </div>
-
+    <!-- Targets area -->
     <!-- Targets (full list + add form) -->
     <div id="targets" class="mt-1 mb-3">
       <h6 class="mb-2">🎯 Targets</h6>
@@ -348,6 +393,7 @@
     </div>
 
     <!-- Data tables (each day wrapped in .day-block) -->
+    {% set daily = (v.daily if v is defined and v.daily is not none else {}) %}
     <div id="daysContainer">
       {% for d, rows in v.daily.items() %}
         {% set date = d %}
@@ -382,7 +428,7 @@
       const idx = dates.indexOf(date);
       if (prevBtn) prevBtn.disabled = (idx === dates.length - 1) || idx === -1;
       if (nextBtn) nextBtn.disabled = (idx <= 0);
-      if (block && window.innerWidth < 768) {
+      if (block) {
         setTimeout(()=> block.scrollIntoView({behavior:'smooth', block:'start'}), 60);
       }
     }
@@ -575,7 +621,7 @@
 
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'hidden') {
-        if (controller) {
+        if (controller) {https://github.com/Pranav280204/yt-tracking-v2/pull/1/conflict?name=templates%252Fvideo_detail.html&ancestor_oid=422e8cb7594f7396dc91b1f73828d64a555c12e3&base_oid=fdb66d66e9ee4b312d91e47628b8dc0b739b9482&head_oid=6fcca8414737c4a1b6b9d59cecee4de57f1994c2
           try { controller.abort(); } catch (e) {}
         }
       } else {
