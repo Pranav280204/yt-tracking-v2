@@ -68,16 +68,6 @@
     }
     .live-badge .dot { width:9px; height:9px; border-radius:50%; background:#28a745; }
     .live-sub { display:block; font-size:.85rem; color:var(--muted); margin-top:.12rem; }
-    .live-counter {
-      margin-top:.75rem;
-      padding:.75rem 1rem;
-      border-radius:.6rem;
-      border:1px solid var(--border);
-      background:linear-gradient(180deg,#f8fbff,#ffffff);
-    }
-    .live-counter-label { font-size:.9rem; color:var(--muted); }
-    .live-counter-value { font-size:2rem; font-weight:800; color:var(--primary); line-height:1.1; }
-    .live-counter-sub { font-size:.8rem; color:var(--muted); margin-top:.15rem; }
 
     .action-row { display:flex; gap:.5rem; flex-wrap:wrap; align-items:center; margin-top:.8rem; }
     .action-row .btn { min-width:110px; flex:0 0 auto; }
@@ -214,12 +204,6 @@
       <a href="https://www.youtube.com/watch?v={{ v.video_id }}" target="_blank" rel="noopener noreferrer">
         <img class="video-thumb" src="{{ v.thumbnail }}" alt="thumbnail for {{ v.name }}">
       </a>
-
-      <div class="live-counter" id="liveViewCounter">
-        <div class="live-counter-label">Live views</div>
-        <div class="live-counter-value" id="liveViewValue">{{ "{:,}".format(v.latest_views or 0) }}</div>
-        <div class="live-counter-sub">Updates every {{ v.pooling_interval }}s</div>
-      </div>
 
       <div class="mt-2">
         <div class="video-title">{{ v.name }}</div>
@@ -491,6 +475,47 @@
     const liveTextPrefix = document.getElementById('liveTextPrefix');
     const liveViewsEl = document.getElementById('liveViews');
     const liveSub = document.getElementById('liveSub');
+    const daysContainer = document.getElementById('daysContainer');
+    let lastRowRefreshIso = lastKnownIso;
+    let rowRefreshQueued = false;
+    let rowsRefreshInFlight = false;
+    const refreshRowsBtn = document.getElementById('refreshRowsBtn');
+
+    async function refreshTableRows({silent = false} = {}) {
+      if (!daysContainer || rowsRefreshInFlight) return;
+      rowsRefreshInFlight = true;
+      if (refreshRowsBtn && !silent) refreshRowsBtn.disabled = true;
+      try {
+        const res = await fetch(`/video/${encodeURIComponent(videoId)}/rows`, {
+          credentials: 'same-origin',
+          cache: 'no-store',
+          headers: { 'Accept': 'application/json' }
+        });
+        if (!res.ok) return;
+        const j = await res.json();
+        if (!j || !j.days_html) return;
+        const currentDate = dateSelect ? dateSelect.value : null;
+        daysContainer.innerHTML = j.days_html;
+        dates = Array.isArray(j.dates) ? j.dates : [];
+        rebuildDateOptions(dates);
+        rebuildDayBlocks();
+        const nextDate = (currentDate && dates.includes(currentDate)) ? currentDate : (dates[0] || null);
+        if (nextDate) showDate(nextDate);
+        if (j.latest_ts_iso) {
+          lastRowRefreshIso = j.latest_ts_iso;
+        }
+      } catch (err) {
+        console.error('row refresh error:', err);
+      } finally {
+        rowsRefreshInFlight = false;
+        rowRefreshQueued = false;
+        if (refreshRowsBtn && !silent) refreshRowsBtn.disabled = false;
+      }
+    }
+
+    if (refreshRowsBtn) {
+      refreshRowsBtn.addEventListener('click', () => refreshTableRows());
+    }
 
     function formatViews(value) {
       return Number.isFinite(value) ? value.toLocaleString() : '—';
@@ -511,51 +536,6 @@
         const nextText = formatViews(value);
         if (el.textContent !== nextText) el.textContent = nextText;
       });
-    }
-
-    async function refreshCurrentDay(reason = 'auto') {
-      if (!dateSelect || !daysContainer) return;
-      if (dayRefreshInFlight) return;
-      const selectedDate = dateSelect.value;
-      if (!selectedDate) return;
-      dayRefreshInFlight = true;
-      if (refreshBtn) {
-        refreshBtn.disabled = true;
-        refreshBtn.textContent = reason === 'manual' ? 'Refreshing…' : 'Refreshing…';
-      }
-      try {
-        const res = await fetch(`/video/${encodeURIComponent(videoId)}/day_html?date=${encodeURIComponent(selectedDate)}`, {
-          credentials: 'same-origin',
-          cache: 'no-store',
-          headers: { 'Accept': 'text/html' }
-        });
-        if (!res.ok) return;
-        const html = await res.text();
-        const parser = new DOMParser();
-        const doc = parser.parseFromString(html, 'text/html');
-        const newBlock = doc.querySelector('.day-block');
-        if (!newBlock) return;
-        const existing = daysContainer.querySelector(`.day-block[data-date="${selectedDate}"]`);
-        if (existing) {
-          existing.replaceWith(newBlock);
-        } else {
-          daysContainer.prepend(newBlock);
-        }
-        dayBlocks = Array.from(document.querySelectorAll('.day-block'));
-        showDate(selectedDate);
-      } catch (err) {
-        console.error('day refresh error:', err);
-      } finally {
-        dayRefreshInFlight = false;
-        if (refreshBtn) {
-          refreshBtn.disabled = false;
-          refreshBtn.textContent = 'Refresh table';
-        }
-      }
-    }
-
-    if (refreshBtn) {
-      refreshBtn.addEventListener('click', () => refreshCurrentDay('manual'));
     }
 
     async function poll() {
